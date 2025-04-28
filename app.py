@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
+import numpy as np
 
 # --- CONFIGURABLE ---
 DATA_FILE = 'data/mesin_log.csv'
@@ -23,6 +24,40 @@ def load_data():
 def save_data(df: pd.DataFrame):
     os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     df.to_csv(DATA_FILE, index=False)
+
+# --- FUNCTION: Generate Dummy Data ---
+def generate_dummy_data():
+    kapal_list = ["Sebuku", "Legundi", "Jatra", "Portlink", "Batu Mandi"]
+    mesin_list = ["Mesin 1", "Mesin 2"]
+    tanggal_range = pd.date_range(start="2024-04-01", periods=14)
+
+    data_simulasi = []
+    np.random.seed(42)
+
+    for kapal in kapal_list:
+        for mesin in mesin_list:
+            for tanggal in tanggal_range:
+                bbm = np.random.uniform(200, 500)
+                pelumas = np.random.uniform(5, 15)
+                rpm = np.random.randint(1400, 1600)
+                jam_kerja = np.random.uniform(3, 20)
+                suhu = np.random.uniform(70, 105)
+                tekanan_oli = np.random.uniform(2.5, 5)
+                beban = np.random.uniform(60, 95)
+                vibrasi = np.random.uniform(0.5, 2.0)
+                alarm = "-" if suhu < 100 and tekanan_oli > 3 else "Warning"
+
+                data_simulasi.append([
+                    tanggal, kapal, mesin, bbm, pelumas, rpm, jam_kerja,
+                    suhu, tekanan_oli, beban, vibrasi, alarm
+                ])
+
+    columns = [
+        'Tanggal', 'Kapal', 'Nama Mesin', 'BBM (L/h)', 'Pelumas (L/h)', 'RPM',
+        'Jam Kerja', 'Suhu Mesin (°C)', 'Tekanan Oli (bar)', 'Beban Mesin (%)',
+        'Vibrasi (mm/s)', 'Alarm/Error'
+    ]
+    return pd.DataFrame(data_simulasi, columns=columns)
 
 # --- STREAMLIT UI ---
 st.set_page_config(page_title="Monitoring Performa Mesin Kapal", layout="wide")
@@ -48,99 +83,49 @@ if menu == "Home":
     """)
     st.success("Silakan pilih menu di sidebar untuk mulai menggunakan aplikasi.")
 
-elif menu == "Input Data":
-    st.subheader("📥 Input Data Mesin Manual")
-    with st.form("Input Form"):
-        tanggal = st.date_input("Tanggal")
-        kapal = st.selectbox("Nama Kapal", ["Sebuku", "Legundi", "Jatra", "Portlink", "Batu Mandi"])
-        nama_mesin = st.selectbox("Nama Mesin", ["Mesin 1", "Mesin 2"])
-        bbm = st.number_input("Konsumsi BBM (L/h)", min_value=0.0)
-        pelumas = st.number_input("Konsumsi Pelumas (L/h)", min_value=0.0)
-        rpm = st.number_input("RPM", min_value=0)
-        jam_kerja = st.number_input("Jam Kerja (jam)", min_value=0.0)
-        suhu = st.number_input("Suhu Mesin (°C)", min_value=0.0)
-        tekanan_oli = st.number_input("Tekanan Oli (bar)", min_value=0.0)
-        beban = st.number_input("Beban Mesin (%)", min_value=0.0, max_value=150.0)
-        vibrasi = st.number_input("Vibrasi (mm/s)", min_value=0.0)
-        alarm = st.text_input("Alarm/Error (optional)")
-
-        submitted = st.form_submit_button("Simpan Data")
-
-        if submitted:
-            new_row = pd.DataFrame({
-                'Tanggal': [tanggal],
-                'Kapal': [kapal],
-                'Nama Mesin': [nama_mesin],
-                'BBM (L/h)': [bbm],
-                'Pelumas (L/h)': [pelumas],
-                'RPM': [rpm],
-                'Jam Kerja': [jam_kerja],
-                'Suhu Mesin (°C)': [suhu],
-                'Tekanan Oli (bar)': [tekanan_oli],
-                'Beban Mesin (%)': [beban],
-                'Vibrasi (mm/s)': [vibrasi],
-                'Alarm/Error': [alarm]
-            })
-            data = pd.concat([data, new_row], ignore_index=True)
-            save_data(data)
-            st.success("Data berhasil disimpan!")
-
-elif menu == "Upload Data":
-    st.subheader("📤 Upload Data Mesin dari File Excel")
-    uploaded_file = st.file_uploader("Upload file Excel", type=["xlsx"])
-
-    if uploaded_file:
-        try:
-            df_upload = pd.read_excel(uploaded_file, parse_dates=['Tanggal'])
-            required_columns = {'Tanggal', 'Kapal', 'Nama Mesin', 'BBM (L/h)', 'Pelumas (L/h)', 'RPM',
-                                 'Jam Kerja', 'Suhu Mesin (°C)', 'Tekanan Oli (bar)', 'Beban Mesin (%)',
-                                 'Vibrasi (mm/s)', 'Alarm/Error'}
-            if required_columns.issubset(df_upload.columns):
-                data = pd.concat([data, df_upload], ignore_index=True)
-                save_data(data)
-                st.success("Data berhasil di-upload dan disimpan!")
-            else:
-                st.error("Format kolom file tidak sesuai template!")
-        except Exception as e:
-            st.error(f"Error membaca file: {e}")
+    if st.button("🛠️ Generate Dummy Data untuk Testing"):
+        dummy_data = generate_dummy_data()
+        data = pd.concat([data, dummy_data], ignore_index=True)
+        save_data(data)
+        st.success("Data dummy berhasil dibuat dan disimpan!")
 
 elif menu == "Dashboard":
     st.subheader("📊 Dashboard Monitoring")
     if data.empty:
         st.warning("Belum ada data mesin.")
     else:
-        kapal_selected = st.selectbox("Pilih Kapal", data['Kapal'].unique())
-        data_kapal = data[data['Kapal'] == kapal_selected]
+        mesin_selected = st.selectbox("Pilih Mesin", data['Nama Mesin'].unique())
+        kapal_options = data['Kapal'].unique().tolist()
+        kapal_selected = st.multiselect("Pilih Kapal (bisa pilih lebih dari satu)", kapal_options, default=kapal_options)
 
-        mesin_selected = st.selectbox("Pilih Mesin", data_kapal['Nama Mesin'].unique())
-        data_filtered = data_kapal[data_kapal['Nama Mesin'] == mesin_selected]
+        data_filtered = data[(data['Nama Mesin'] == mesin_selected) & (data['Kapal'].isin(kapal_selected))]
 
         col1, col2 = st.columns(2)
         with col1:
-            fig_bbm = px.line(data_filtered, x='Tanggal', y='BBM (L/h)', title="Konsumsi BBM Harian")
+            fig_bbm = px.line(data_filtered, x='Tanggal', y='BBM (L/h)', color='Kapal', title="Konsumsi BBM Harian per Kapal")
             st.plotly_chart(fig_bbm, use_container_width=True)
 
         with col2:
-            fig_rpm = px.line(data_filtered, x='Tanggal', y='RPM', title="RPM Harian")
+            fig_rpm = px.line(data_filtered, x='Tanggal', y='RPM', color='Kapal', title="RPM Harian per Kapal")
             st.plotly_chart(fig_rpm, use_container_width=True)
 
         col3, col4 = st.columns(2)
         with col3:
-            fig_suhu = px.line(data_filtered, x='Tanggal', y='Suhu Mesin (°C)', title="Suhu Mesin Harian")
+            fig_suhu = px.line(data_filtered, x='Tanggal', y='Suhu Mesin (°C)', color='Kapal', title="Suhu Mesin Harian per Kapal")
             st.plotly_chart(fig_suhu, use_container_width=True)
 
         with col4:
-            fig_tekanan = px.line(data_filtered, x='Tanggal', y='Tekanan Oli (bar)', title="Tekanan Oli Harian")
+            fig_tekanan = px.line(data_filtered, x='Tanggal', y='Tekanan Oli (bar)', color='Kapal', title="Tekanan Oli Harian per Kapal")
             st.plotly_chart(fig_tekanan, use_container_width=True)
 
         st.dataframe(data_filtered.sort_values('Tanggal', ascending=False), use_container_width=True)
 
         with st.spinner('Mempersiapkan file laporan...'):
             os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-            laporan_path = os.path.join(OUTPUT_FOLDER, f'laporan_{kapal_selected}_{mesin_selected}.xlsx')
+            laporan_path = os.path.join(OUTPUT_FOLDER, f'laporan_summary_{mesin_selected}.xlsx')
             data_filtered.to_excel(laporan_path, index=False)
             with open(laporan_path, 'rb') as f:
-                st.download_button("📥 Download Laporan", f, file_name=f"laporan_{kapal_selected}_{mesin_selected}.xlsx")
+                st.download_button("📥 Download Laporan", f, file_name=f"laporan_summary_{mesin_selected}.xlsx")
 
 # --- FOOTER ---
 st.markdown("""
