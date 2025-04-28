@@ -4,7 +4,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
-import numpy as np
 
 # --- CONFIGURABLE ---
 DATA_FILE = 'data/mesin_log.csv'
@@ -24,40 +23,6 @@ def load_data():
 def save_data(df: pd.DataFrame):
     os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     df.to_csv(DATA_FILE, index=False)
-
-# --- FUNCTION: Generate Dummy Data ---
-def generate_dummy_data():
-    kapal_list = ["Sebuku", "Legundi", "Jatra", "Portlink", "Batu Mandi"]
-    mesin_list = ["Mesin 1", "Mesin 2"]
-    tanggal_range = pd.date_range(start="2024-04-01", periods=14)
-
-    data_simulasi = []
-    np.random.seed(42)
-
-    for kapal in kapal_list:
-        for mesin in mesin_list:
-            for tanggal in tanggal_range:
-                bbm = np.random.uniform(200, 500)
-                pelumas = np.random.uniform(5, 15)
-                rpm = np.random.randint(1400, 1600)
-                jam_kerja = np.random.uniform(3, 20)
-                suhu = np.random.uniform(70, 105)
-                tekanan_oli = np.random.uniform(2.5, 5)
-                beban = np.random.uniform(60, 95)
-                vibrasi = np.random.uniform(0.5, 2.0)
-                alarm = "-" if suhu < 100 and tekanan_oli > 3 else "Warning"
-
-                data_simulasi.append([
-                    tanggal, kapal, mesin, bbm, pelumas, rpm, jam_kerja,
-                    suhu, tekanan_oli, beban, vibrasi, alarm
-                ])
-
-    columns = [
-        'Tanggal', 'Kapal', 'Nama Mesin', 'BBM (L/h)', 'Pelumas (L/h)', 'RPM',
-        'Jam Kerja', 'Suhu Mesin (°C)', 'Tekanan Oli (bar)', 'Beban Mesin (%)',
-        'Vibrasi (mm/s)', 'Alarm/Error'
-    ]
-    return pd.DataFrame(data_simulasi, columns=columns)
 
 # --- STREAMLIT UI ---
 st.set_page_config(page_title="Monitoring Performa Mesin Kapal", layout="wide")
@@ -83,11 +48,61 @@ if menu == "Home":
     """)
     st.success("Silakan pilih menu di sidebar untuk mulai menggunakan aplikasi.")
 
-    if st.button("🛠️ Generate Dummy Data untuk Testing"):
-        dummy_data = generate_dummy_data()
-        data = pd.concat([data, dummy_data], ignore_index=True)
-        save_data(data)
-        st.success("Data dummy berhasil dibuat dan disimpan!")
+elif menu == "Input Data":
+    st.subheader("📥 Input Data Mesin Manual")
+    with st.form("Input Form"):
+        tanggal = st.date_input("Tanggal")
+        kapal = st.selectbox("Nama Kapal", ["Sebuku", "Legundi", "Jatra", "Portlink", "Batu Mandi"])
+        nama_mesin = st.selectbox("Nama Mesin", ["Mesin 1", "Mesin 2"])
+        bbm = st.number_input("Konsumsi BBM (L/h)", min_value=0.0)
+        pelumas = st.number_input("Konsumsi Pelumas (L/h)", min_value=0.0)
+        rpm = st.number_input("RPM", min_value=0)
+        jam_kerja = st.number_input("Jam Kerja (jam)", min_value=0.0)
+        suhu = st.number_input("Suhu Mesin (°C)", min_value=0.0)
+        tekanan_oli = st.number_input("Tekanan Oli (bar)", min_value=0.0)
+        beban = st.number_input("Beban Mesin (%)", min_value=0.0, max_value=150.0)
+        vibrasi = st.number_input("Vibrasi (mm/s)", min_value=0.0)
+        alarm = st.text_input("Alarm/Error (optional)")
+
+        submitted = st.form_submit_button("Simpan Data")
+
+        if submitted:
+            new_row = pd.DataFrame({
+                'Tanggal': [tanggal],
+                'Kapal': [kapal],
+                'Nama Mesin': [nama_mesin],
+                'BBM (L/h)': [bbm],
+                'Pelumas (L/h)': [pelumas],
+                'RPM': [rpm],
+                'Jam Kerja': [jam_kerja],
+                'Suhu Mesin (°C)': [suhu],
+                'Tekanan Oli (bar)': [tekanan_oli],
+                'Beban Mesin (%)': [beban],
+                'Vibrasi (mm/s)': [vibrasi],
+                'Alarm/Error': [alarm]
+            })
+            data = pd.concat([data, new_row], ignore_index=True)
+            save_data(data)
+            st.success("Data berhasil disimpan!")
+
+elif menu == "Upload Data":
+    st.subheader("📤 Upload Data Mesin dari File Excel")
+    uploaded_file = st.file_uploader("Upload file Excel", type=["xlsx"])
+
+    if uploaded_file:
+        try:
+            df_upload = pd.read_excel(uploaded_file, parse_dates=['Tanggal'])
+            required_columns = {'Tanggal', 'Kapal', 'Nama Mesin', 'BBM (L/h)', 'Pelumas (L/h)', 'RPM',
+                                 'Jam Kerja', 'Suhu Mesin (°C)', 'Tekanan Oli (bar)', 'Beban Mesin (%)',
+                                 'Vibrasi (mm/s)', 'Alarm/Error'}
+            if required_columns.issubset(df_upload.columns):
+                data = pd.concat([data, df_upload], ignore_index=True)
+                save_data(data)
+                st.success("Data berhasil di-upload dan disimpan!")
+            else:
+                st.error("Format kolom file tidak sesuai template!")
+        except Exception as e:
+            st.error(f"Error membaca file: {e}")
 
 elif menu == "Dashboard":
     st.subheader("📊 Dashboard Monitoring")
